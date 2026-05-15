@@ -1,85 +1,96 @@
-
+"""
+app.py — Obesity Level Prediction App
+Run: streamlit run app.py
+"""
 import streamlit as st
-import pickle
 import pandas as pd
+import joblib
+from src.train import ObesityPreprocessor
 
-with open('random_forest_model.pkl', 'rb') as model_file:
-    model = pickle.load(model_file)
+pipeline = joblib.load('models/pipeline.pkl')
 
-with open('minmax_scaler.pkl', 'rb') as scaler_file:
-    scaler = pickle.load(scaler_file)
+LABEL_MAP = {0: 'Insufficient Weight', 1: 'Normal Weight', 2: 'Overweight', 4: 'Obesity'}
 
-st.title("Obesity Prediction App")
+YES_NO   = {'Yes': 'yes', 'No': 'no'}
+FREQ_MAP = {'No': 'no', 'Sometimes': 'Sometimes', 'Frequently': 'Frequently', 'Always': 'Always'}
+MTRANS_MAP = {
+    'Automobile':          'Automobile',
+    'Bike':                'Bike',
+    'Motorbike':           'Motorbike',
+    'Public Transportation': 'Public_Transportation',
+    'Walking':             'Walking',
+}
 
-#user input for fields
-gender = st.selectbox("Gender", ['Male', 'Female'])
-age = st.number_input("Age", min_value=1, max_value=120)
-height = st.number_input("Height (in meters)", min_value=1.0, max_value=2.5)
-weight = st.number_input("Weight (in kg)", min_value=10.0, max_value=300.0)
-family_history = st.selectbox("Family history with overweight", ['Yes', 'No'])
-favc = st.selectbox("Frequent consumption of high caloric food", ['Yes', 'No'])
-fcvc = st.slider("Frequency of vegetable consumption", 1, 3, step=1)
-st.markdown("""
-**1**: Low or no vegetable consumption  
-**2**: Moderate vegetable consumption  
-**3**: Daily vegetable consumption
-""")
-ncp = st.slider("Number of main meals", 1, 4, step=1)
-caec = st.selectbox("Consumption of food between meals", ['No', 'Sometimes', 'Frequently', 'Always'])
+st.title("Obesity Level Prediction")
+
+# Inputs
+gender         = st.selectbox("Gender", ['Male', 'Female'])
+age            = st.number_input("Age (years)", min_value=1, max_value=120, value=25)
+height         = st.number_input("Height (m)", min_value=0.5, max_value=2.5, value=1.70, step=0.01)
+weight         = st.number_input("Weight (kg)", min_value=10.0, max_value=300.0, value=70.0, step=0.5)
+family_history = st.selectbox("Family history of overweight?", ['Yes', 'No'])
+favc           = st.selectbox("Do you eat high-calorie food frequently?", ['Yes', 'No'])
+
+st.markdown("**Vegetable consumption frequency** · 1 = rarely · 2 = sometimes · 3 = daily")
+fcvc = st.slider("Vegetable consumption frequency", 1, 3, value=2, step=1)
+
+st.markdown("**Number of main meals per day**")
+ncp = st.slider("Number of main meals", 1, 4, value=3, step=1)
+
+caec_display = st.selectbox("Eating between meals?", list(FREQ_MAP.keys()))
+
 smoke = st.selectbox("Do you smoke?", ['Yes', 'No'])
-ch2o = st.slider("Daily water consumption (liters)", 1.0, 3.0, step=0.1)
-scc = st.selectbox("Do you monitor calories?", ['Yes', 'No'])
-faf = st.slider("Physical activity frequency", 0, 3, step=1)
-st.markdown("""
-**1**: Low or no Physical activity  
-**2**: Moderate Physical activity  
-**3**: Daily Physical activity
-""")
-tue = st.slider("Time using technology devices", 0, 2, step=1)
-st.markdown("""
-**1**: Low or no Usage  
-**2**: Moderate Usage  
-**3**: Daily Usage
-""")
-calc = st.selectbox("Alcohol consumption", ['No', 'Sometimes', 'Frequently', 'Always'])
-mtrans = st.selectbox("Transportation method", ['Public Transportation', 'Walking', 'Automobile', 'Motorbike', 'Bike'])
 
-#use the same encoding as during training
-input_data = pd.DataFrame([[
-    gender, age, height, weight, family_history, favc, fcvc, ncp, caec,
-    smoke, ch2o, scc, faf, tue, calc, mtrans
-]], columns=[
-    'Gender', 'Age', 'Height', 'Weight', 'family_history_with_overweight',
-    'FAVC', 'FCVC', 'NCP', 'CAEC', 'SMOKE', 'CH2O', 'SCC', 'FAF', 'TUE', 'CALC', 'MTRANS'
-])
+st.markdown("**Daily water consumption** · 1 = less than 1 L · 2 = 1–2 L · 3 = more than 2 L")
+ch2o = st.slider("Daily water consumption (liters)", 1, 3, value=2, step=1)
 
-# Apply the same preprocessing as during training
-input_data_encoded = pd.get_dummies(input_data)
+scc = st.selectbox("Do you monitor your calorie intake?", ['Yes', 'No'])
 
-# Ensure the input columns match the training data
-# Load original training columns for alignment
-training_data = pd.read_csv('Obesity Data Set.csv')
-training_columns = pd.get_dummies(training_data.drop(columns=['NObeyesdad'])).columns
-input_data_encoded = input_data_encoded.reindex(columns=training_columns, fill_value=0)
+st.markdown("**Physical activity frequency** · 0 = none · 1 = 1–2 days/wk · 2 = 2–4 days · 3 = 4–5 days")
+faf = st.slider("Physical activity frequency", 0, 3, value=1, step=1)
 
-# Scale the input
-scaled_input = scaler.transform(input_data_encoded)
+st.markdown("**Daily technology use** · 0 = 0–2 h · 1 = 3–5 h · 2 = more than 5 h")
+tue = st.slider("Time using technology devices", 0, 2, value=1, step=1)
 
-if st.button("Predict"):
-    prediction = model.predict(scaled_input)
-    predicted_label = prediction[0]
+calc_display   = st.selectbox("How often do you drink alcohol?", list(FREQ_MAP.keys()))
+mtrans_display = st.selectbox("Primary transportation method", list(MTRANS_MAP.keys()))
 
-    #labels mapping
-    label_map = {
-        'Insufficient_Weight': 'Insufficient weight',
-        'Normal_Weight': 'Normal weight',
-        'Overweight_Level_I': 'Overweight',
-        'Overweight_Level_II': 'Overweight',
-        'Obesity_Type_I': 'Obese',
-        'Obesity_Type_II': 'Obese',
-        'Obesity_Type_III': 'Obese'
-    }
+# Validation 
+errors = []
+if height <= 0:
+    errors.append("Height must be greater than 0.")
+if age <= 0:
+    errors.append("Age must be greater than 0.")
+if weight <= 0:
+    errors.append("Weight must be greater than 0.")
 
-    readable_label = label_map.get(predicted_label, predicted_label)
+for msg in errors:
+    st.warning(msg)
 
-    st.success(f"Prediction: {readable_label}")
+# Prediction 
+if not errors and st.button("Predict"):
+    input_df = pd.DataFrame([{
+        'Gender':                         gender,
+        'Age':                            float(age),
+        'Height':                         float(height),
+        'Weight':                         float(weight),
+        'family_history_with_overweight': YES_NO[family_history],
+        'FAVC':                           YES_NO[favc],
+        'FCVC':                           float(fcvc),
+        'NCP':                            float(ncp),
+        'CAEC':                           FREQ_MAP[caec_display],
+        'SMOKE':                          YES_NO[smoke],
+        'CH2O':                           float(ch2o),
+        'SCC':                            YES_NO[scc],
+        'FAF':                            float(faf),
+        'TUE':                            float(tue),
+        'CALC':                           FREQ_MAP[calc_display],
+        'MTRANS':                         MTRANS_MAP[mtrans_display],
+    }])
+
+    prediction = pipeline.predict(input_df)[0]
+    label = LABEL_MAP.get(prediction, str(prediction))
+
+    # colour-code the result by clinical severity
+    color_fn = {0: st.info, 1: st.success, 2: st.warning, 4: st.error}
+    color_fn.get(prediction, st.write)(f"**Predicted obesity level: {label}**")
