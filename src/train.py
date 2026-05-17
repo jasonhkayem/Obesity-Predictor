@@ -34,8 +34,8 @@ MODEL_PATH = os.path.join(_HERE, '..', 'models', 'pipeline.pkl')
 # columns that go through MinMaxScaler
 NUMERICAL_COLS = ['Age', 'Height', 'Weight', 'FCVC', 'NCP', 'CH2O', 'FAF', 'TUE']
 
-# engineered ratio features get their own scaler (computed after scaling NUMERICAL_COLS)
-RATIO_COLS = ['meal_regularity_score', 'hydration_activity_ratio', 'tech_activity_ratio']
+# all continuous columns that go through MinMaxScaler — raw numerics + BMI + engineered features
+ALL_SCALE_COLS = NUMERICAL_COLS + ['BMI', 'meal_regularity_score', 'hydration_activity_ratio', 'tech_activity_ratio']
 
 # CAEC and CALC have a natural severity ordering (none → always), so ordinal encoding
 # preserves that relationship more compactly than one-hot; OHE would imply no ordering
@@ -57,7 +57,7 @@ TARGET_RAW_MAP = {
 }
 
 
-# ── preprocessing ──────────────────────────────────────────────────────────────
+# Preprocessing
 
 class ObesityPreprocessor(BaseEstimator, TransformerMixin):
     """
@@ -98,28 +98,12 @@ class ObesityPreprocessor(BaseEstimator, TransformerMixin):
         df  = self._impute(df, rng)
         df  = self._encode(df)
 
-        df['BMI'] = df['Weight'] / (df['Height'] ** 2)
-
-        # MinMaxScaler
-        self.num_scaler_ = MinMaxScaler().fit(df[NUMERICAL_COLS])
-        df[NUMERICAL_COLS] = self.num_scaler_.transform(df[NUMERICAL_COLS])
-
         df = self._engineer(df)
 
-        # Second scaler for derived ratio features (same leakage-prevention rationale)
-        self.ratio_scaler_ = MinMaxScaler().fit(df[RATIO_COLS])
-        df[RATIO_COLS] = self.ratio_scaler_.transform(df[RATIO_COLS])
+        self.num_scaler_ = MinMaxScaler().fit(df[ALL_SCALE_COLS])
+        df[ALL_SCALE_COLS] = self.num_scaler_.transform(df[ALL_SCALE_COLS])
 
-        # 3. Correlation-based feature selection on training labels only
-        # Pearson |r| > 0.3 keeps features with a meaningful linear association with y.
-        if y is not None:
-            df_tmp = df.copy()
-            df_tmp['__y__'] = np.asarray(y)
-            corr = df_tmp.select_dtypes(include='number').corr()['__y__'].drop('__y__')
-            self.selected_features_ = corr[corr.abs() > 0.3].index.tolist()
-        else:
-            self.selected_features_ = list(df.columns)
-
+        self.feature_names_ = list(df.columns)
         return self
 
     def transform(self, X):
@@ -127,11 +111,9 @@ class ObesityPreprocessor(BaseEstimator, TransformerMixin):
         rng = np.random.RandomState(42)
         df  = self._impute(df, rng)
         df  = self._encode(df)
-        df['BMI'] = df['Weight'] / (df['Height'] ** 2)
-        df[NUMERICAL_COLS] = self.num_scaler_.transform(df[NUMERICAL_COLS])
         df  = self._engineer(df)
-        df[RATIO_COLS] = self.ratio_scaler_.transform(df[RATIO_COLS])
-        return df[self.selected_features_].values
+        df[ALL_SCALE_COLS] = self.num_scaler_.transform(df[ALL_SCALE_COLS])
+        return df.values
 
     # Private helpers
 
@@ -175,6 +157,7 @@ class ObesityPreprocessor(BaseEstimator, TransformerMixin):
         df = df.copy()
         # domain-motivated interaction terms: eating regularity, hydration vs. activity,
         # sedentary behaviour vs. activity, and the compound genetic+diet risk
+        df['BMI']                      = df['Weight'] / (df['Height'] ** 2)
         df['meal_regularity_score']    = df['FCVC'] * df['NCP'] - df['CAEC']
         df['hydration_activity_ratio'] = df['CH2O'] / (df['FAF'] + 0.1)  # +0.1 prevents /0
         df['tech_activity_ratio']      = df['TUE']  / (df['FAF'] + 0.1)
@@ -313,7 +296,7 @@ def main():
     # Feature importances
     rf         = best_pipeline.named_steps['model']
     pre        = best_pipeline.named_steps['preprocessor']
-    importances = pd.Series(rf.feature_importances_, index=pre.selected_features_)
+    importances = pd.Series(rf.feature_importances_, index=pre.feature_names_)
     print(f"\nFeature importances (descending):")
     print(importances.sort_values(ascending=False).round(4).to_string())
 

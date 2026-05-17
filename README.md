@@ -1,6 +1,6 @@
 # Obesity Level Predictor
 
-A supervised multi-class classifier that estimates a person's obesity risk level from 16 self-reported behavioral and physical features (age, height, weight, dietary habits, physical activity, etc.). The full preprocessing pipeline — KNN imputation, ordinal encoding, BMI computation, MinMaxScaling, and interaction-term feature engineering — is bundled into a single `sklearn.Pipeline` to prevent data leakage between training and test sets. The final Random Forest model achieves ~96% accuracy and ~0.96 macro F1 on a held-out test set.
+A supervised multi-class classifier that estimates a person's obesity risk level from 16 self-reported behavioral and physical features (age, height, weight, dietary habits, physical activity, etc.). The full preprocessing pipeline — KNN imputation, ordinal encoding, feature engineering (BMI + interaction terms), MinMaxScaling — is bundled into a single `sklearn.Pipeline` to prevent data leakage between training and test sets. The final Random Forest model achieves 96.5% accuracy and 0.964 macro F1 on a held-out test set.
 
 ## Dataset
 
@@ -33,12 +33,12 @@ Results on the 20% held-out test set (4-class problem, `random_state=42`).
 | Model | Accuracy | Macro F1 |
 |---|---|---|
 | Dummy (most-frequent) | 46.0% | 0.158 |
-| Logistic Regression | 93.3% | 0.911 |
-| K-Nearest Neighbors | 95.3% | 0.950 |
-| Support Vector Machine | 91.8% | 0.891 |
-| Decision Tree | 95.0% | 0.943 |
-| Naive Bayes | 84.1% | 0.800 |
-| **Random Forest (tuned)** | **96.8%** | **0.965** |
+| Logistic Regression | 87.3% | 0.816 |
+| K-Nearest Neighbors | 78.4% | 0.712 |
+| Support Vector Machine | 88.6% | 0.840 |
+| Decision Tree | 95.8% | 0.953 |
+| Naive Bayes | 59.2% | 0.414 |
+| **Random Forest (tuned)** | **96.5%** | **0.964** |
 
 Evaluated on a 20% stratified hold-out set (`random_state=42`). Run `python src/train.py` to reproduce.
 
